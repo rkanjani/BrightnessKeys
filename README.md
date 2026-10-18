@@ -28,7 +28,9 @@ cd BrightnessKeys
 open ~/Applications/BrightnessKeys.app
 ```
 
-Local builds are ad-hoc signed, so macOS treats each rebuild as a new app: toggle the Accessibility permission off and on after rebuilding. `./release.sh <version>` produces a signed, notarized release (see the script for the one-time setup).
+Local builds are ad-hoc signed, so macOS treats each rebuild as a new app: toggle the Accessibility permission off and on after rebuilding. You can also open `BrightnessKeys.xcodeproj` in Xcode.
+
+`./release.sh <version>` archives the Xcode project, signs it with Developer ID, notarizes it through Xcode's signed-in account, and publishes a GitHub release.
 
 ## Command line
 

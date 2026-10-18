@@ -1,42 +1,37 @@
 #!/bin/zsh
-# Builds, signs with Developer ID, notarizes, staples, and publishes a GitHub release.
+# Archives, signs with Developer ID, notarizes, staples, and publishes a GitHub release.
 #   ./release.sh 1.0.0
-# One-time setup:
-#   - A "Developer ID Application" certificate in your keychain (Xcode → Settings → Accounts → Manage Certificates)
-#   - xcrun notarytool store-credentials BrightnessKeys --apple-id <apple-id> --team-id <team-id>
+# Requires Xcode signed in to the team's Apple developer account (Xcode → Settings → Accounts).
+# Signing and notarization go through that session, so no passwords or API keys are needed.
 # Environment:
-#   NOTARY_PROFILE=BrightnessKeys   keychain profile created above
-#   SKIP_PUBLISH=1                  stop after producing the notarized zip
+#   SKIP_PUBLISH=1   stop after producing the notarized zip
 set -e
 cd "$(dirname "$0")"
 
 VERSION=${1:?usage: ./release.sh <version>}
-NOTARY_PROFILE=${NOTARY_PROFILE:-BrightnessKeys}
-APP=build/BrightnessKeys.app
+BUILD_NUMBER=$(git rev-list --count HEAD)
+ARCHIVE=build/BrightnessKeys-$VERSION.xcarchive
+APP=build/notarized/BrightnessKeys.app
 ZIP=build/BrightnessKeys-$VERSION.zip
 
 [[ -z "$(git status --porcelain)" ]] || { echo "Commit your changes first."; exit 1; }
 
-IDENTITY=$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application: .*\)"/\1/p' | head -1)
-[[ -n "$IDENTITY" ]] || { echo "No Developer ID Application certificate found in the keychain."; exit 1; }
-echo "Signing as: $IDENTITY"
+rm -rf "$ARCHIVE" build/export build/notarized
+xcodebuild -project BrightnessKeys.xcodeproj -scheme BrightnessKeys -configuration Release \
+  -destination 'generic/platform=macOS' -archivePath "$ARCHIVE" -allowProvisioningUpdates \
+  MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" archive
 
-VERSION=$VERSION SIGN_IDENTITY="$IDENTITY" ./build.sh
+# Signs with Developer ID and uploads to Apple's notary service.
+xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportPath build/export \
+  -exportOptionsPlist Resources/ExportOptions.plist -allowProvisioningUpdates
+
+echo "Waiting for notarization..."
+until xcodebuild -exportNotarizedApp -archivePath "$ARCHIVE" -exportPath build/notarized 2>build/notarize.log; do
+  grep -q "is processing" build/notarize.log || { cat build/notarize.log; exit 1; }
+  sleep 30
+done
+
 codesign --verify --strict --verbose=2 "$APP"
-
-echo "Submitting for notarization (usually a few minutes)..."
-rm -f build/notarize.zip
-ditto -c -k --keepParent "$APP" build/notarize.zip
-RESULT=$(xcrun notarytool submit build/notarize.zip --keychain-profile "$NOTARY_PROFILE" --wait --output-format json)
-STATUS=$(echo "$RESULT" | plutil -extract status raw -o - - 2>/dev/null || true)
-if [[ "$STATUS" != "Accepted" ]]; then
-  echo "Notarization failed: $RESULT"
-  ID=$(echo "$RESULT" | plutil -extract id raw -o - - 2>/dev/null || true)
-  [[ -n "$ID" ]] && xcrun notarytool log "$ID" --keychain-profile "$NOTARY_PROFILE"
-  exit 1
-fi
-
-xcrun stapler staple "$APP"
 xcrun stapler validate "$APP"
 spctl --assess --type execute --verbose=2 "$APP"
 
