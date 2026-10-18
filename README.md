@@ -15,6 +15,12 @@ A tiny macOS menu bar app that makes your keyboard's brightness keys adjust **th
 
 ## Install
 
+1. Download the latest **BrightnessKeys-x.y.z.zip** from [Releases](https://github.com/rkanjani/BrightnessKeys/releases/latest). It is signed with Developer ID and notarized by Apple.
+2. Unzip it, drag **BrightnessKeys.app** to Applications, and open it.
+3. Allow **BrightnessKeys** in **System Settings → Privacy & Security → Accessibility**. That permission is what lets the app catch the brightness keys before macOS does.
+
+### Build from source
+
 ```bash
 git clone https://github.com/rkanjani/BrightnessKeys.git
 cd BrightnessKeys
@@ -22,7 +28,7 @@ cd BrightnessKeys
 open ~/Applications/BrightnessKeys.app
 ```
 
-On first launch, allow **BrightnessKeys** in **System Settings → Privacy & Security → Accessibility**. That permission is what lets the app catch the brightness keys before macOS does. Rebuilding the app changes its signature, so toggle the permission off and on after a rebuild.
+Local builds are ad-hoc signed, so macOS treats each rebuild as a new app: toggle the Accessibility permission off and on after rebuilding. `./release.sh <version>` produces a signed, notarized release (see the script for the one-time setup).
 
 ## Command line
 
